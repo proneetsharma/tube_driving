@@ -1,0 +1,11 @@
+<?xml version="1.0"?>
+<launch>
+    <arg name="robot_id" default="ropod_001"/>
+
+    <node pkg="tube_navigation" type="tube_navigation" name="tube_navigation" 
+          output="screen">
+    <remap from="~cmd_vel" to="/load/cmd_vel"/> <!-- for BRSU ropod -->
+    <remap from="~goal_route" to="/route_planner/result"/> <!-- for BRSU ropod -->
+    <remap from="~laser_scan" to="/load/laser_scan"/> <!-- for BRSU ropod -->
+    </node>
+</launch>
