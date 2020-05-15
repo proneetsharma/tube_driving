@@ -11,12 +11,23 @@
 #include <tube_navigation/TubeNavigationConfig.h>
 #include <ropod_ros_msgs/RoutePlannerActionResult.h>
 
+using namespace std;
+#include <string>
+#include <vector>
+
+struct geometry_vertex{
+    float x; float y; string id;
+};
+
+
 class TubeNavigationROS
 {
     public:
         TubeNavigationROS();
         virtual ~TubeNavigationROS();
         void run();
+        visualization_msgs::Marker points;
+
 
     private:
         ros::NodeHandle nh;
@@ -35,8 +46,11 @@ class TubeNavigationROS
           
         void dynamicReconfigureCallback(tube_navigation::TubeNavigationConfig &dyn_config, uint32_t level);
 
+        void visualizeMarker(std::list<geometry_vertex>* vertices);
+
 
 
 
 };
+
 #endif
