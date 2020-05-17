@@ -8,6 +8,6 @@
     <remap from="~cmd_vel" to="/load/cmd_vel"/> <!-- for BRSU ropod -->
     <remap from="~goal_route" to="/route_planner/result"/> <!-- for BRSU ropod -->
     <remap from="~laser_scan" to="/load/laser_scan"/> <!-- for BRSU ropod -->
-    <remap from="~visualization_marker" to="/load/visualization_marker"/> <!-- for BRSU ropod -->
+    <remap from="~visualization_marker" to="/visualization_marker"/> <!-- for BRSU ropod -->
     </node>
 </launch>

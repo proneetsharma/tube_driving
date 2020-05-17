@@ -23,10 +23,10 @@ struct geometry_vertex{
 class TubeNavigationROS
 {
     public:
-        TubeNavigationROS();
-        virtual ~TubeNavigationROS();
-        void run();
         visualization_msgs::Marker points;
+        TubeNavigationROS();
+        void run();
+        virtual ~TubeNavigationROS();
 
 
     private:
@@ -39,17 +39,10 @@ class TubeNavigationROS
         // tf::TransformListener tf_listener;
 
         dynamic_reconfigure::Server<tube_navigation::TubeNavigationConfig> dyn_recon_srv;
-
         void laserScanCallback(const sensor_msgs::LaserScan::ConstPtr& sensormsg);
-
+        void visualizeMarker();
         void goalRouteCallback(const ropod_ros_msgs::RoutePlannerActionResult::ConstPtr& goalroutemsg);
-          
         void dynamicReconfigureCallback(tube_navigation::TubeNavigationConfig &dyn_config, uint32_t level);
-
-        void visualizeMarker(std::list<geometry_vertex>* vertices);
-
-
-
 
 };
 
