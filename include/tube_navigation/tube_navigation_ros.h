@@ -10,6 +10,7 @@
 #include <visualization_msgs/Marker.h>
 #include <tube_navigation/TubeNavigationConfig.h>
 #include <ropod_ros_msgs/RoutePlannerActionResult.h>
+#include <geometry_msgs/PoseWithCovarianceStamped.h>
 
 class TubeNavigationROS
 {
@@ -24,6 +25,7 @@ class TubeNavigationROS
         ros::Subscriber goal_route_sub;
         ros::Publisher cmd_vel_pub;
         ros::Publisher markers_pub;
+	ros::Subscriber sub_amcl;
 
         // tf::TransformListener tf_listener;
 
@@ -32,6 +34,7 @@ class TubeNavigationROS
         void laserScanCallback(const sensor_msgs::LaserScan::ConstPtr& sensormsg);
 
         void goalRouteCallback(const ropod_ros_msgs::RoutePlannerActionResult::ConstPtr& goalroutemsg);
+        void poseAMCLCallback(const geometry_msgs::PoseWithCovarianceStamped::ConstPtr& msgAMCL);
           
         void dynamicReconfigureCallback(tube_navigation::TubeNavigationConfig &dyn_config, uint32_t level);
 
