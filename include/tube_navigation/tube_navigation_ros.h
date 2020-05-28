@@ -2,7 +2,6 @@
 #define TUBE_NAVIGATION_ROS_H
 
 #include <ros/ros.h>
-
 #include <sensor_msgs/LaserScan.h>
 #include <geometry_msgs/PoseStamped.h>
 #include <geometry_msgs/Twist.h>
@@ -10,20 +9,17 @@
 #include <visualization_msgs/Marker.h>
 #include <tube_navigation/TubeNavigationConfig.h>
 #include <ropod_ros_msgs/RoutePlannerActionResult.h>
-
-using namespace std;
 #include <string>
 #include <vector>
 
-struct geometry_vertex{
-    float x; float y; string id;
+struct GeometryVertex{
+    float x; float y; std::string id;
 };
 
 
 class TubeNavigationROS
 {
     public:
-        visualization_msgs::Marker points;
         TubeNavigationROS();
         void run();
         virtual ~TubeNavigationROS();
@@ -35,6 +31,10 @@ class TubeNavigationROS
         ros::Subscriber goal_route_sub;
         ros::Publisher cmd_vel_pub;
         ros::Publisher markers_pub;
+        visualization_msgs::Marker points;
+        std::vector<GeometryVertex> vertex_list;
+        ropod_ros_msgs::RoutePlannerResult goal_result;
+
 
         // tf::TransformListener tf_listener;
 
