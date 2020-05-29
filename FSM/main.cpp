@@ -3,12 +3,12 @@
 // user application
 int main(){
     int i;
-    cout<<"Press Control+C or a negative number to exit the program"<<"\n";
+    std::cout<<"Press Ctrl + C or a negative number to exit the program"<<"\n";
     finiteStateMachine* robot_fsm = new finiteStateMachine();
     while (true){
-        cin >> i; 
+        std::cin >> i; 
         if (i >= 0){
-            robot_event e = static_cast<robot_event>(i);
+            RobotEvent e = static_cast<RobotEvent>(i);
             robot_fsm->event(e);
         }
         else{

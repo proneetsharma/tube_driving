@@ -2,57 +2,25 @@
 #include <assert.h>
 
 typedef struct {
-    robot_state current;
-    robot_event event;
-    robot_state next;
-} state_transition_element;
-
-typedef struct {
-    robot_state state;
-    void (finiteStateMachine::*func)(robot_state);
-}state_function;
-
-// assign proper names to event
-state_transition_element state_transition_table[] = {
-    {idle, event_0 , cruising},
-    {cruising, event_1 ,entry_corner},
-    {entry_corner, event_2, align_accel},
-    {align_accel, event_3 , align_decel},
-    {align_decel, event_4 , turn},
-    {align_accel, event_5 , turn},
-    {turn, event_6 , cruising},
-    {cruising, event_7 , entry_straight},
-    {entry_straight, event_8 , inter_straight},
-    {inter_straight, event_9 , cruising},
-    {cruising, event_10 , overtake_spacious},
-    {overtake_spacious, event_11 , cruising},
-    {cruising, event_12 , overtake_tight},
-    {overtake_tight, event_13 , cruising},
-    {inter_straight, event_14 , overtake_spacious},
-    {turn, event_15 , overtake_tight},
-    {inter_straight, event_16 ,overtake_tight},
-    {turn, event_17 , overtake_spacious}
-};
+    RobotState state;
+    void (finiteStateMachine::*func)(RobotState);
+}StateFunction;
 
 /* we will modify this when all the state functions are implemented
    right now we are just calling function that prints the transition state
 */
-static state_function transition_map[] = {
-    {idle , &finiteStateMachine::stateFunction},
-    {cruising , &finiteStateMachine::stateFunction},
-    {entry_corner , &finiteStateMachine::stateFunction},
-    {align_accel , &finiteStateMachine::stateFunction},
-    {align_decel , &finiteStateMachine::stateFunction},
-    {turn , &finiteStateMachine::stateFunction},
-    {entry_straight , &finiteStateMachine::stateFunction},
-    {inter_straight , &finiteStateMachine::stateFunction},
-    {overtake_spacious , &finiteStateMachine::stateFunction},
-    {overtake_tight , &finiteStateMachine::stateFunction},
+static StateFunction transition_map[] = {
+    {idle , &finiteStateMachine::currentState},
+    {cruising , &finiteStateMachine::currentState},
+    {entry_corner , &finiteStateMachine::currentState},
+    {align_accel , &finiteStateMachine::currentState},
+    {align_decel , &finiteStateMachine::currentState},
+    {turn , &finiteStateMachine::currentState},
+    {entry_straight , &finiteStateMachine::currentState},
+    {inter_straight , &finiteStateMachine::currentState},
+    {overtake_spacious , &finiteStateMachine::currentState},
+    {overtake_tight , &finiteStateMachine::currentState}
 };
-
-// remove this array once the state functions are implemented
-string s[10] = { "idle", "cruising", "entry_corner", "align_accel", "align_decel", \
-                "turn","entry_straight","inter_straight","overtake_spacious","overtake_tight"};
 
 finiteStateMachine::finiteStateMachine(){
     maximum_states = maxi_states;
@@ -62,13 +30,13 @@ finiteStateMachine::finiteStateMachine(){
 }
 
 // remove this function once all the state functions are implemented
-void finiteStateMachine::stateFunction(robot_state rs){
-    cout<<"current state: "<< s[rs] <<"\n";
+void finiteStateMachine::currentState(RobotState rs){
+    std::cout<<"current state: "<< s[rs] <<"\n";
 }
 
 // add one more paramter for event data
-void finiteStateMachine::event(robot_event new_event){
-    cout <<"previous state: " << s[state_transition_table[new_event].current] << "\n";
+void finiteStateMachine::event(RobotEvent new_event){
+    std::cout <<"previous state: " << s[state_transition_table[new_event].current] << "\n";
     if(current_state == state_transition_table[new_event].current){
         event_generated = true;
         current_state = state_transition_table[new_event].next;
@@ -76,7 +44,7 @@ void finiteStateMachine::event(robot_event new_event){
     }
     else{
         // delete the event data if any
-        cout<<"Encountered illegal transition"<<"\n";
+        std::cout<<"Encountered illegal transition"<<"\n";
     }
 }
 
