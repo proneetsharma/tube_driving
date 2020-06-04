@@ -1,8 +1,6 @@
 #include "ros/ros.h"
 #include "tube_navigation/tube_navigation_ros.h"
 
-
-
 TubeNavigationROS::TubeNavigationROS() : nh("~")
 {
     laserscan_sub = nh.subscribe("laser_scan", 1, &TubeNavigationROS::laserScanCallback, this);
@@ -10,6 +8,8 @@ TubeNavigationROS::TubeNavigationROS() : nh("~")
 
     cmd_vel_pub = nh.advertise<geometry_msgs::Twist>("cmd_vel", 1);
     markers_pub = nh.advertise<visualization_msgs::Marker>("visualization_marker", 1);
+    wallmarker_pub = nh.advertise<visualization_msgs::Marker>("wall/visualization_marker", 1);
+    outer_wallmarker_pub = nh.advertise<visualization_msgs::Marker>("outerwall/visualization_marker", 1);
 
 
     dynamic_reconfigure::Server<tube_navigation::TubeNavigationConfig>::CallbackType f;
@@ -39,8 +39,8 @@ void TubeNavigationROS::visualizeMarker()
     points.action = visualization_msgs::Marker::ADD;
 
     // Set the scale of the marker -- 1x1x1 here means 1m on a side
-    points.scale.x = 0.3;
-    points.scale.y = 0.3;
+    points.scale.x = 0.05;
+    points.scale.y = 0.05;
     points.scale.z = 0;
 
     // Set the color
@@ -50,6 +50,42 @@ void TubeNavigationROS::visualizeMarker()
 
     points.lifetime = ros::Duration();
     markers_pub.publish(points);
+
+
+    // Visualize right wall
+    // Set the frame ID and timestamp.
+    offset_wall.header.frame_id = "/map";
+    offset_wall.header.stamp = ros::Time::now();
+    offset_wall.id = 0;
+    offset_wall.type = visualization_msgs::Marker::LINE_STRIP;
+    offset_wall.action = visualization_msgs::Marker::ADD;
+    offset_wall.scale.x = 0.05;
+    offset_wall.scale.y = 0.05;
+    offset_wall.scale.z = 0;
+    offset_wall.color.a = 0.7;
+    offset_wall.color.g = 0.8;
+    offset_wall.color.b = 0.0;
+    offset_wall.lifetime = ros::Duration();
+    wallmarker_pub.publish(offset_wall);
+
+
+    // Visualize outer right wall
+    // Set the frame ID and timestamp.
+    outer_offset_wall.header.frame_id = "/map";
+    outer_offset_wall.header.stamp = ros::Time::now();
+    outer_offset_wall.id = 0;
+    outer_offset_wall.type = visualization_msgs::Marker::LINE_STRIP;
+    outer_offset_wall.action = visualization_msgs::Marker::ADD;
+    outer_offset_wall.scale.x = 0.05;
+    outer_offset_wall.scale.y = 0.05;
+    outer_offset_wall.scale.z = 0;
+    outer_offset_wall.color.a = 0.7;
+    outer_offset_wall.color.g = 0.8;
+    outer_offset_wall.color.b = 0.0;
+    outer_offset_wall.lifetime = ros::Duration();
+    outer_wallmarker_pub.publish(outer_offset_wall);
+
+
 }
 
 void TubeNavigationROS::goalRouteCallback(const ropod_ros_msgs::RoutePlannerActionResult::ConstPtr& goalroutemsg)
@@ -60,6 +96,8 @@ void TubeNavigationROS::goalRouteCallback(const ropod_ros_msgs::RoutePlannerActi
     std::vector<ropod_ros_msgs::Area> planner_areas = goal_result.areas;
 
     geometry_msgs::Point p;  
+    geometry_msgs::Point right_p;  
+
 
     for (int i = 0; i < planner_areas.size(); i++)
     {
@@ -71,7 +109,47 @@ void TubeNavigationROS::goalRouteCallback(const ropod_ros_msgs::RoutePlannerActi
                 coordinate.x = planner_areas[i].sub_areas[j].geometry.vertices[k].x;
                 coordinate.y = planner_areas[i].sub_areas[j].geometry.vertices[k].y;
                 vertex_list.push_back(coordinate);
+
+                if ((planner_areas[i].type != "junction") && (k == 0 || k == 1))
+                {
+                    right_vertex_list.push_back(coordinate);
+                }
             }
+
+        int right_points_size = right_vertex_list.size();
+
+        if (right_points_size >= 2)
+            {
+                float x1 = right_vertex_list[right_points_size - 2].x;
+                float y1 = right_vertex_list[right_points_size - 2].y;
+                float x2 = right_vertex_list[right_points_size - 1].x;
+                float y2 = right_vertex_list[right_points_size - 1].y;
+
+                int L = sqrt((x1-x2)*(x1-x2)+(y1-y2)*(y1-y2));
+                float offsetPixels = -0.1;
+                float outer_offsetPixels = -0.7;
+
+                // Parallel line points for right wall
+                if (L != 0)
+                {
+                    right_p.x = x1 + offsetPixels * (y2-y1) / L;
+                    right_p.y = y1 + offsetPixels * (x1-x2) / L;
+                    offset_wall.points.push_back(right_p);
+
+                    right_p.x = x1 + outer_offsetPixels * (y2-y1) / L;
+                    right_p.y = y1 + outer_offsetPixels * (x1-x2) / L;
+                    outer_offset_wall.points.push_back(right_p);
+
+                    right_p.x = x2 + offsetPixels * (y2-y1) / L;
+                    right_p.y = y2 + offsetPixels * (x1-x2) / L;
+                    offset_wall.points.push_back(right_p);
+
+                    right_p.x = x2 + outer_offsetPixels * (y2-y1) / L;
+                    right_p.y = y2 + outer_offsetPixels * (x1-x2) / L;
+                    outer_offset_wall.points.push_back(right_p);
+                }
+                
+            }    
 
         // Draw a rectangle
         points_size = vertex_list.size();
@@ -91,6 +169,8 @@ void TubeNavigationROS::goalRouteCallback(const ropod_ros_msgs::RoutePlannerActi
                         p.y = vertex_list[points_size-(4-i)].y;
                     }
                     points.points.push_back(p);
+
+
                 }
             }
         }

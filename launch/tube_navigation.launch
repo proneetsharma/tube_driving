@@ -9,5 +9,7 @@
     <remap from="~goal_route" to="/route_planner/result"/> <!-- for BRSU ropod -->
     <remap from="~laser_scan" to="/load/laser_scan"/> <!-- for BRSU ropod -->
     <remap from="~visualization_marker" to="/visualization_marker"/> <!-- for BRSU ropod -->
+    <remap from="~/wall/visualization_marker" to="wall/visualization_marker"/> <!-- for BRSU ropod -->
+    <remap from="~/outerwall/visualization_marker" to="outerwall/visualization_marker"/>
     </node>
 </launch>

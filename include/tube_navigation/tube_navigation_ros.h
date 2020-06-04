@@ -31,8 +31,13 @@ class TubeNavigationROS
         ros::Subscriber goal_route_sub;
         ros::Publisher cmd_vel_pub;
         ros::Publisher markers_pub;
+        ros::Publisher wallmarker_pub;
+        ros::Publisher outer_wallmarker_pub;
         visualization_msgs::Marker points;
+        visualization_msgs::Marker offset_wall;
+        visualization_msgs::Marker outer_offset_wall;
         std::vector<GeometryVertex> vertex_list;
+        std::vector<GeometryVertex> right_vertex_list;
         ropod_ros_msgs::RoutePlannerResult goal_result;
 
 
