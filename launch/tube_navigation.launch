@@ -11,5 +11,6 @@
     <remap from="~visualization_marker" to="/visualization_marker"/> <!-- for BRSU ropod -->
     <remap from="~/wall/visualization_marker" to="wall/visualization_marker"/> <!-- for BRSU ropod -->
     <remap from="~/outerwall/visualization_marker" to="outerwall/visualization_marker"/>
+    <remap from="~/feeler/visualization_marker" to="feeler/visualization_marker"/>
     </node>
 </launch>

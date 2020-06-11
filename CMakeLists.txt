@@ -12,6 +12,7 @@ find_package(catkin REQUIRED
   geometry_msgs
   actionlib_msgs
   dynamic_reconfigure
+  tf
 )
 
 
