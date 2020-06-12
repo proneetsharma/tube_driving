@@ -11,13 +11,18 @@
 #include <tube_navigation/TubeNavigationConfig.h>
 #include <ropod_ros_msgs/RoutePlannerActionResult.h>
 #include <geometry_msgs/PoseWithCovarianceStamped.h>
+#include <tf/tf.h>
+#include <tf/transform_datatypes.h>
+#include <tf/transform_listener.h>
 
 class TubeNavigationROS
 {
     public:
         TubeNavigationROS();
-	void run(){__run();};
+	    void run(){__run();};
+        void getFeeler();
         virtual ~TubeNavigationROS();
+
         
 
     private:
@@ -28,11 +33,12 @@ class TubeNavigationROS
         ros::Subscriber odom_sub;
         ros::Publisher cmd_vel_pub;
         ros::Publisher markers_pub;
-	
+        ros::Publisher feeler_pub;
+        visualization_msgs::Marker feeler;
         ropod_ros_msgs::RoutePlannerResult goal_result;
         
 
-        // tf::TransformListener tf_listener;
+        tf::TransformListener tf_listener;
 
         dynamic_reconfigure::Server<tube_navigation::TubeNavigationConfig> dyn_recon_srv;
 
@@ -42,7 +48,7 @@ class TubeNavigationROS
         void poseAMCLCallback(const geometry_msgs::PoseWithCovarianceStamped::ConstPtr& msgAMCL);
           
         void dynamicReconfigureCallback(tube_navigation::TubeNavigationConfig &dyn_config, uint32_t level);
-	void __run();
+	    void __run();
 
 
 

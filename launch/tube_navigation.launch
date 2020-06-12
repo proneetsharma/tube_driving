@@ -9,6 +9,6 @@
     <remap from="~laser_scan" to="/load/laser_scan"/> <!-- for BRSU ropod -->
     <remap from="~robot_pose" to="/ropod_001_amcl/pose"/> <!-- for BRSU ropod -->
     <remap from="~odom_pose" to="/ropod_001/odom"/> <!-- for BRSU ropod -->
-    
+    <remap from="~/feeler/visualization_marker" to="feeler/visualization_marker"/> 
     </node>
 </launch>
