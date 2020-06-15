@@ -5,8 +5,9 @@ TubeNavigationROS::TubeNavigationROS() : nh("~")
 {
     current_label = 1;
     laserscan_sub = nh.subscribe("laser_scan", 1, &TubeNavigationROS::laserScanCallback, this);
+    amcl_sub = nh.subscribe<geometry_msgs::PoseWithCovarianceStamped>("robot_pose", 1, &TubeNavigationROS::poseAMCLCallback, this);
     goal_route_sub = nh.subscribe<ropod_ros_msgs::RoutePlannerActionResult>("goal_route", 1, &TubeNavigationROS::goalRouteCallback, this);
-
+    odom_sub = nh.subscribe<nav_msgs::Odometry>("odom_pose", 100, &TubeNavigationROS::getOdomVelCallback, this); 
     cmd_vel_pub = nh.advertise<geometry_msgs::Twist>("cmd_vel", 1);
     markers_pub = nh.advertise<visualization_msgs::Marker>("visualization_marker", 1);
     wallmarker_pub = nh.advertise<visualization_msgs::Marker>("wall/visualization_marker", 1);
@@ -19,13 +20,6 @@ TubeNavigationROS::TubeNavigationROS() : nh("~")
     dyn_recon_srv.setCallback(f);
 }
 
-void TubeNavigationROS::run()
-{
-    // geometry_msgs::Twist cmd_vel;
-    // cmd_vel_pub.publish(cmd_vel);
-
-
-}
 
 void TubeNavigationROS::laserScanCallback(const sensor_msgs::LaserScan::ConstPtr& sensormsg)
 {
@@ -63,13 +57,13 @@ void TubeNavigationROS::visualizeMarker()
     offset_wall.id = 0;
     offset_wall.type = visualization_msgs::Marker::LINE_STRIP;
     offset_wall.action = visualization_msgs::Marker::ADD;                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       
-    offset_wall.scale.x = 0.3;
-    offset_wall.scale.y = 0.3;
+    offset_wall.scale.x = 0.05;
+    offset_wall.scale.y = 0.05;
     offset_wall.scale.z = 0;
     offset_wall.color.a = 0.7;
-    offset_wall.color.g = 0.0;
+    offset_wall.color.g = 0.8;
     offset_wall.color.b = 0.0;
-    offset_wall.color.r = 1.0;
+    offset_wall.color.r = 0.0;
     offset_wall.lifetime = ros::Duration();
     wallmarker_pub.publish(offset_wall);
 
@@ -96,7 +90,6 @@ void TubeNavigationROS::getFeeler()
 {
 	geometry_msgs::Point feeler_point; 
 
-	tf::TransformListener tf_listener;
 	tf::StampedTransform right_front_wheel_pose, left_front_wheel_pose, robot_centre_pose;
 	std::string right_front_wheel = std::string("ropod_001/right_front_wheel_link");
 	std::string left_front_wheel = std::string("ropod_001/left_front_wheel_link");
@@ -150,6 +143,14 @@ void TubeNavigationROS::getFeeler()
     getCurrentAndNextState(x,y);
 }
 
+double distBetweenFeelerTube(geometry_msgs::Point fp, GeometryVertex tfc, GeometryVertex tbc)
+{
+	// https://en.wikipedia.org/wiki/Distance_from_a_point_to_a_line
+	double numerator =  (tbc.y-tfc.y)*fp.x - (tbc.x-tfc.x)*fp.y + tbc.x*tfc.y - tbc.y*tfc.x;
+	double denominator = sqrt( (tbc.y-tfc.y)*(tbc.y-tfc.y) + (tbc.x-tfc.x)*(tbc.x-tfc.x) );
+	return numerator/denominator;
+}
+
 void TubeNavigationROS::getCurrentAndNextState(float x, float y)
 {
     std::vector<Area>::iterator ait;
@@ -181,6 +182,7 @@ void TubeNavigationROS::getCurrentAndNextState(float x, float y)
         }                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   
     }
 }
+
 
 void TubeNavigationROS::goalRouteCallback(const ropod_ros_msgs::RoutePlannerActionResult::ConstPtr& goalroutemsg)
 {
@@ -283,7 +285,111 @@ void TubeNavigationROS::goalRouteCallback(const ropod_ros_msgs::RoutePlannerActi
     areainfo.type = sub_area_type;
     area_list.push_back(areainfo);
     }
+    start_navigation = true;
     visualizeMarker();
+}
+
+void TubeNavigationROS::poseAMCLCallback(const geometry_msgs::PoseWithCovarianceStamped::ConstPtr& msgAMCL)
+{
+    poseAMCL_x = msgAMCL->pose.pose.position.x;
+    poseAMCL_y = msgAMCL->pose.pose.position.y;
+    poseAMCL_a = tf::getYaw(msgAMCL->pose.pose.orientation); 
+	//std::cout<<poseAMCL_a;
+    ROS_INFO_STREAM("Received pose");   
+     
+}
+
+void TubeNavigationROS::getOdomVelCallback(const nav_msgs::Odometry::ConstPtr& odom_vel)
+{
+    odom_x = odom_vel->twist.twist.linear.x;
+    odom_y = odom_vel->twist.twist.linear.y;
+    odom_theta = odom_vel->twist.twist.angular.z;
+    odom_phi = atan2(odom_y, odom_x);
+    odom_v = sqrt(odom_x*odom_x+odom_y*odom_y);
+	//ROS_INFO_STREAM("Received Odom values");
+    
+}
+
+void TubeNavigationROS::__run()
+{
+	if (start_navigation == true)
+	{	    
+	    geometry_msgs::Twist cmd_vel;
+	    ros::Rate rate(10.0);
+		bool start = true;
+	    for (int i=0; i<vertex_list.size()/4; i++)//vertex_list.size()/4
+	    {
+			while (fabs(vertex_list[(i*4)+1].y-ropod_y)>=1e-1)
+			{
+				getFeeler();				
+				float phi_des_0 = 0; 
+				tf::TransformListener tf_listener;
+				tf::StampedTransform t_ropod_pose;
+				std::string target_frame = std::string("ropod_001/base_link");
+				tf_listener.waitForTransform(target_frame, "/map", ros::Time(0), ros::Duration(3.0));
+											
+				tf_listener.lookupTransform("map", target_frame, ros::Time(0), t_ropod_pose);
+
+				ropod_x = t_ropod_pose.getOrigin().getX();
+				ropod_y = t_ropod_pose.getOrigin().getY();
+				ropod_theta = tf::getYaw(t_ropod_pose.getRotation());
+				// std::cout<<"\n Feeler_point"<<feeler.points[0].x<<feeler.points[0].y<<feeler.points[1].x<<feeler.points[1].y;
+				// std::cout<<"\n robot_angle from tf"<<ropod_theta;
+				prev_x = vertex_list[(i*4)+0].x, prev_y = vertex_list[(i*4)+0].y;   
+				wall_theta = atan2(vertex_list[(i*4)+1].y-prev_y, vertex_list[(i*4)+1].x-prev_x);
+				double wall_1 = atan2(vertex_list[(i*4)+5].y-vertex_list[(i*4)+4].y, vertex_list[(i*4)+5].x-vertex_list[(i*4)+4].x);
+				// std::cout<<"\n Difference in hallway"<<wall_1-wall_theta;
+				// std::cout<<"\n wall point"<<vertex_list[(i*4)+2].y; 
+				// std::cout <<"\n robot y"<<ropod_y;
+				// std::cout <<"\n wall angle"<<wall_theta;
+				
+				cmd_vel.linear.x = 1.1;//cos(robot_vel);
+				// phi_des_0 = atan2(ropod_y, vertex_list[(i*4)+2].y);
+				phi_des_0 = atan2(ropod_y, vertex_list[(i*4)+1].y);
+				// std::cout <<"\n robot velocity"<<cos(robot_vel);
+				double distance = distBetweenFeelerTube(feeler.points[0], vertex_list[(i*4)+0], vertex_list[(i*4)+1]);
+				// std::cout <<"\n distance"<<distance;				
+				cmd_vel_pub.publish(cmd_vel);
+				
+				if (abs(wall_1-wall_theta)<=1)
+				{
+					if (fabs(wall_theta - ropod_theta)>=1e-1)
+					{		
+						if (fabs(distance)>0.8)		
+						{
+							delta_theta = wall_theta-ropod_theta; //poseAMCLa - wall_theta;
+							// std::cout <<"\n change in angle"<<delta_theta;
+							
+							cmd_vel.angular.z = delta_theta-phi_des_0-1;
+							// std::cout <<"\n steering angle"<<cmd_vel.angular.z;
+							cmd_vel_pub.publish(cmd_vel);
+							start = false;
+						}	 
+						else
+						{
+							delta_theta = wall_theta-ropod_theta; //poseAMCLa - wall_theta;
+							// std::cout <<"\n change in angle"<<delta_theta;
+							
+							cmd_vel.angular.z = delta_theta;
+							// std::cout <<"\n steering angle"<<cmd_vel.angular.z;
+							cmd_vel_pub.publish(cmd_vel);
+						}
+					}
+				} 
+				
+				else
+				{
+					cmd_vel.angular.z = wall_theta - ropod_theta;
+					// std::cout <<"\n steering angle"<<cmd_vel.angular.z;
+					cmd_vel_pub.publish(cmd_vel);
+				}				
+			}
+		}
+		run_exe = true;
+	}
+
+	
+
 }
     
 void TubeNavigationROS::dynamicReconfigureCallback(tube_navigation::TubeNavigationConfig &dyn_config, uint32_t level)
@@ -300,23 +406,19 @@ int main(int argc, char *argv[])
 {
     ros::init(argc, argv, "tube_navigation");
     TubeNavigationROS tube_navigtion_ros;
-    
+        
     ros::Rate loop_rate(10.0);
     while (ros::ok())
     {
+		if (run_exe == false)
+		{
+			tube_navigtion_ros.run();  
+
+		}
+              
         loop_rate.sleep();
         ros::spinOnce();
-		tube_navigtion_ros.getFeeler();
     }
     return 0;
 }
 
-
-
-// # ifdef 0
-//     std::vector<Area>::iterator ait;    
-//     for (ait = area_list.begin() ; ait != area_list.end(); ait++)         
-//     {
-//         std::cout << ait->type << std::endl;
-//     }
-// # endif
