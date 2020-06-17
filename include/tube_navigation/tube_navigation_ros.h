@@ -3,6 +3,7 @@
 
 #include <ros/ros.h>
 #include <sensor_msgs/LaserScan.h>
+#include <nav_msgs/Odometry.h>
 #include <geometry_msgs/PoseStamped.h>
 #include <geometry_msgs/Twist.h>
 #include <dynamic_reconfigure/server.h>
@@ -27,21 +28,28 @@ struct Area
 };
 
 double pose_x, pose_y, right_front_wheel_x, right_front_wheel_y, left_front_wheel_x, left_front_wheel_y;
-double prev_x, prev_y, wall_theta;
+double poseAMCL_x = 0.0, poseAMCL_y = 0.0, poseAMCL_a = 0.0 , ropod_x = 0.0, ropod_y = 0.0, ropod_theta = 0.0;
+double odom_x = 0.0, odom_y = 0.0, odom_theta= 0.0, odom_phi = 0.0, odom_v = 0.0;
+float distance = 0.0, wall_theta = 0.0, delta_theta = 0.0, robot_vel = 0.0;
+float prev_x = 0.0, prev_y = 0.0;
+geometry_msgs::Point feeler_point; 
 
+bool start_navigation = false, run_exe = false;
 
 class TubeNavigationROS
 {
     public:
         TubeNavigationROS();
-        void run();
-        virtual ~TubeNavigationROS();
+	    void run(){__run();};
         void getFeeler();
+        virtual ~TubeNavigationROS();
 
 
     private:
         int current_label;
         ros::NodeHandle nh;
+        ros::Subscriber amcl_sub;
+        ros::Subscriber odom_sub;
         ros::Subscriber laserscan_sub;
         ros::Subscriber goal_route_sub;
         ros::Publisher cmd_vel_pub;
@@ -59,15 +67,17 @@ class TubeNavigationROS
         ropod_ros_msgs::RoutePlannerResult goal_result;
 
 
-        // tf::TransformListener tf_listener;
+        tf::TransformListener tf_listener;
 
         dynamic_reconfigure::Server<tube_navigation::TubeNavigationConfig> dyn_recon_srv;
+        void getOdomVelCallback(const nav_msgs::Odometry::ConstPtr& odom_vel);
         void laserScanCallback(const sensor_msgs::LaserScan::ConstPtr& sensormsg);
+        void poseAMCLCallback(const geometry_msgs::PoseWithCovarianceStamped::ConstPtr& msgAMCL);
         void visualizeMarker();
         void getCurrentAndNextState(float x, float y);
         void goalRouteCallback(const ropod_ros_msgs::RoutePlannerActionResult::ConstPtr& goalroutemsg);
         void dynamicReconfigureCallback(tube_navigation::TubeNavigationConfig &dyn_config, uint32_t level);
-
+        void __run();
 };
 
 #endif
