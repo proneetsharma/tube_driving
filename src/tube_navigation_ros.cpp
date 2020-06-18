@@ -1,8 +1,20 @@
 #include "ros/ros.h"
 #include "tube_navigation/tube_navigation_ros.h"
 
+typedef struct {
+    RobotState state;
+    void (TubeNavigationROS::*func)();
+}StateFunction;
+
+static StateFunction transition_map[] = {
+    {idle , &TubeNavigationROS::Idle},
+    {cruising , &TubeNavigationROS::run}
+};
+
 TubeNavigationROS::TubeNavigationROS() : nh("~")
 {
+    maximum_states = maxi_states;
+    current_state = idle;
     current_label = 1;
     laserscan_sub = nh.subscribe("laser_scan", 1, &TubeNavigationROS::laserScanCallback, this);
     amcl_sub = nh.subscribe<geometry_msgs::PoseWithCovarianceStamped>("robot_pose", 1, &TubeNavigationROS::poseAMCLCallback, this);
@@ -13,6 +25,7 @@ TubeNavigationROS::TubeNavigationROS() : nh("~")
     wallmarker_pub = nh.advertise<visualization_msgs::Marker>("wall/visualization_marker", 1);
     outer_wallmarker_pub = nh.advertise<visualization_msgs::Marker>("outerwall/visualization_marker", 1);
     feeler_pub = nh.advertise<visualization_msgs::Marker>("feeler/visualization_marker", 1);
+    nextState_pub = nh.advertise<visualization_msgs::Marker>("next_state", 1);
 
 
     dynamic_reconfigure::Server<tube_navigation::TubeNavigationConfig>::CallbackType f;
@@ -20,6 +33,20 @@ TubeNavigationROS::TubeNavigationROS() : nh("~")
     dyn_recon_srv.setCallback(f);
 }
 
+void TubeNavigationROS::Idle(){
+
+}
+// add one more paramter for event data
+void TubeNavigationROS::event(RobotEvent new_event){
+    event_generated = true;
+    current_state = state_transition_table[new_event].next;
+    while (event_generated){
+        event_generated = false;
+        assert(current_state < maxi_states); 
+        (this->*transition_map[current_state].func)();
+    //delete event data once used
+    }
+}
 
 void TubeNavigationROS::laserScanCallback(const sensor_msgs::LaserScan::ConstPtr& sensormsg)
 {
@@ -63,7 +90,6 @@ void TubeNavigationROS::visualizeMarker()
     offset_wall.color.a = 0.7;
     offset_wall.color.g = 0.8;
     offset_wall.color.b = 0.0;
-    offset_wall.color.r = 0.0;
     offset_wall.lifetime = ros::Duration();
     wallmarker_pub.publish(offset_wall);
 
@@ -153,34 +179,67 @@ double distBetweenFeelerTube(geometry_msgs::Point fp, GeometryVertex tfc, Geomet
 
 void TubeNavigationROS::getCurrentAndNextState(float x, float y)
 {
+    geometry_msgs::Point nextpoint;
+    AreaType currentIdLabel;
     std::vector<Area>::iterator ait;
+
+    GeometryVertex left_point;
+    GeometryVertex right_point;
+    geometry_msgs::Point robot_c;
+
+
     for (ait = area_list.begin() ; ait != area_list.end(); ait++)         
     {
-        if (ait->label == current_label)
+        if ((ait->label == current_label))
         {
-            float right_x = ait->p1.x;
-            float right_y = ait->p1.y;
-            float left_x = ait->p2.x;
-            float left_y = ait->p2.y;
+            left_point.x = ait->p2.x;
+            left_point.y = ait->p2.y;
+            right_point.x = ait->p3.x;
+            right_point.y = ait->p3.y;
 
-            float v1_x = (left_x - right_x);
-            float v1_y = (left_y - right_y);                                                                                                            
+            robot_c.x = x;
+            robot_c.y = y;
 
-            float v2_x = (left_x - x);                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          
-            float v2_y = (left_y - y);
+            nextState.points.clear();
+            nextpoint.x = ait->p2.x;
+            nextpoint.y = ait->p2.y;
+            nextState.points.push_back(nextpoint);
+            nextpoint.x = ait->p3.x;
+            nextpoint.y = ait->p3.y;
+            nextState.points.push_back(nextpoint);
 
-            float dot_product = (v1_x*v2_x) + (v1_y*v2_y);
-            float magnitude = vectormag(v1_x,v1_y) * vectormag(v2_x,v2_y); 
+            nextState.header.frame_id = "/map";
+            nextState.header.stamp = ros::Time::now();
+            nextState.id = 0;
+            nextState.type = visualization_msgs::Marker::POINTS;
+            nextState.action = visualization_msgs::Marker::ADD;
+            nextState.scale.x = 0.2;
+            nextState.scale.y = 0.2;
+            nextState.scale.z = 0;
+            nextState.color.a = 0.7;
+            nextState.color.g = 0.3;
+            nextState.color.b = 0.0;
+            nextState.color.r = 0.5;
+            nextState.lifetime = ros::Duration();
+            nextState_pub.publish(nextState);
 
-            float angle = atan2((v1_y*v2_y), (v1_x*v2_x));
-            std::cout<<"Angle: "<<angle << "label: " << ait->label<<"\n";
+            float distance = distBetweenFeelerTube(robot_c, left_point, right_point);
 
-            if (angle > 0)
+            currentIdLabel.label = ait->label;
+            currentIdLabel.type = ait->type;
+
+            std::cout << "Label: " << currentIdLabel.label << "Type: " << currentIdLabel.type <<"\n";
+            
+            if(distance < 0) 
             {
-                current_label += 1;
+                current_label++;   
             }
-        }                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   
+
+        }   
+            
     }
+
+ 
 }
 
 
@@ -192,7 +251,8 @@ void TubeNavigationROS::goalRouteCallback(const ropod_ros_msgs::RoutePlannerActi
     goal_result = goalroutemsg->result;
     std::vector<ropod_ros_msgs::Area> planner_areas = goal_result.areas;
     geometry_msgs::Point p;  
-    geometry_msgs::Point right_p;  
+    geometry_msgs::Point right_p; 
+    int count = 1;
 
     for (int i = 0; i < planner_areas.size(); i++)
     {
@@ -240,6 +300,16 @@ void TubeNavigationROS::goalRouteCallback(const ropod_ros_msgs::RoutePlannerActi
                     points.points.push_back(p);
                 }
 
+            
+            Area areainfo;
+            areainfo.p1 = vertex_list[points_size-1];
+            areainfo.p2 = vertex_list[points_size-2];
+            areainfo.p3 = vertex_list[points_size-3];
+            areainfo.p4 = vertex_list[points_size-4];
+            areainfo.label = count;
+            areainfo.type = sub_area_type;
+            area_list.push_back(areainfo);
+            count++;
             }
 
         int right_points_size = right_vertex_list.size();
@@ -276,14 +346,15 @@ void TubeNavigationROS::goalRouteCallback(const ropod_ros_msgs::RoutePlannerActi
                 }
             }    
         }
-    Area areainfo;
-    areainfo.p1 = vertex_list[(i*4)+1];
-    areainfo.p2 = vertex_list[(i*4)+2];
-    areainfo.p3 = vertex_list[(i*4)+3];
-    areainfo.p4 = vertex_list[(i*4)+4];
-    areainfo.label = i+1;
-    areainfo.type = sub_area_type;
-    area_list.push_back(areainfo);
+        // Area areainfo;
+        // areainfo.p1 = vertex_list[(i*4)+1];
+        // areainfo.p2 = vertex_list[(i*4)+2];
+        // areainfo.p3 = vertex_list[(i*4)+3];
+        // areainfo.p4 = vertex_list[(i*4)+4];
+        // areainfo.label = i+1;
+        // areainfo.type = "junction";
+        // area_list.push_back(areainfo);
+
     }
     start_navigation = true;
     visualizeMarker();
@@ -313,9 +384,10 @@ void TubeNavigationROS::__run()
 	    geometry_msgs::Twist cmd_vel;
 	    ros::Rate rate(10.0);
 		bool start = true;
-	    for (int i=0; i<vertex_list.size()/4; i++)//vertex_list.size()/4
+	    for (int i=0; i<area_list.size(); i++)
 	    {
-			while (fabs(right_vertex_list[(i*2)+1].y-ropod_y)>=1e-1)
+			// while (fabs(right_vertex_list[(i*2)+1].y-ropod_y)>=1e-1)
+			while (currentIdLabel.label != area_list[i+1].label)
 			{
 				getFeeler();				
 				float phi_des_0 = 0; 
@@ -338,7 +410,7 @@ void TubeNavigationROS::__run()
 				phi_des_0 = atan2(ropod_y, right_vertex_list[(i*2)+1].y);
 				double distance = distBetweenFeelerTube(feeler.points[0], right_vertex_list[(i*2)+1], right_vertex_list[(i*2)+0]);
 				cmd_vel_pub.publish(cmd_vel);
-				
+				// std::cout << "Hallway angle: "<< wall_1-wall_theta; 
 				if (abs(wall_1-wall_theta)<=1)
 				{
 					if (fabs(wall_theta - ropod_theta)>=1e-1)
@@ -360,7 +432,9 @@ void TubeNavigationROS::__run()
 				} 
 				else
 				{
-					cmd_vel.angular.z = wall_theta - ropod_theta;
+					cmd_vel.angular.z = wall_theta-ropod_theta;
+
+					// cmd_vel.angular.z = -(ropod_theta+3.14);
 					cmd_vel_pub.publish(cmd_vel);
 				}				
 			}
@@ -389,10 +463,9 @@ int main(int argc, char *argv[])
     {
 		if (run_exe == false)
 		{
-			tube_navigtion_ros.run();  
-
+            tube_navigtion_ros.event(event_0);
+			// tube_navigtion_ros.run();  
 		}
-              
         loop_rate.sleep();
         ros::spinOnce();
     }

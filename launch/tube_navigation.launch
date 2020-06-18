@@ -5,14 +5,15 @@
     <node pkg="tube_navigation" type="tube_navigation" name="tube_navigation" 
           output="screen">
     <!-- <param name="global_frame_id" value="map"/> -->
-    <remap from="~cmd_vel" to="/ropod_001/cmd_vel"/> <!-- for BRSU ropod -->
-    <remap from="~goal_route" to="/route_planner/result"/> <!-- for BRSU ropod -->
-    <remap from="~laser_scan" to="/load/laser_scan"/> <!-- for BRSU ropod -->
-    <remap from="~visualization_marker" to="/visualization_marker"/> <!-- for BRSU ropod -->
-    <remap from="~/wall/visualization_marker" to="wall/visualization_marker"/> <!-- for BRSU ropod -->
+    
+    <remap from="~cmd_vel" to="/ropod_001/cmd_vel"/> 
+    <remap from="~goal_route" to="/route_planner/result"/>
+    <remap from="~laser_scan" to="/load/laser_scan"/> 
+    <remap from="~visualization_marker" to="/visualization_marker"/> 
+    <remap from="~/wall/visualization_marker" to="wall/visualization_marker"/> 
     <remap from="~/outerwall/visualization_marker" to="outerwall/visualization_marker"/>
     <remap from="~/feeler/visualization_marker" to="feeler/visualization_marker"/>
-    <remap from="~robot_pose" to="/ropod_001_amcl/pose"/> <!-- for BRSU ropod -->
-    <remap from="~odom_pose" to="/ropod_001/odom"/> <!-- for BRSU ropod -->
+    <remap from="~robot_pose" to="/ropod_001_amcl/pose"/> 
+    <remap from="~odom_pose" to="/ropod_001/odom"/> 
     </node>
 </launch>
