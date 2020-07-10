@@ -16,8 +16,11 @@
 #include <string>
 #include <vector>
 #include <iostream>
+
+// define macros for math and boolean operations
 #define vectormag(x,y) sqrt(pow(x,2) + pow(y,2))
 #define XOR(a,b) (!a != !b)
+
 struct GeometryVertex
 {
     float x; float y;
@@ -34,14 +37,16 @@ struct Area
 };
 
 double pose_x, pose_y, right_front_wheel_x, right_front_wheel_y, left_front_wheel_x, left_front_wheel_y;
-double poseAMCL_x = 0.0, poseAMCL_y = 0.0, poseAMCL_a = 0.0 , ropod_x = 0.0, ropod_y = 0.0, ropod_theta = 0.0;
+double poseAMCL_x = 0.0, poseAMCL_y = 0.0, poseAMCL_a = 0.0 , ropod_x = 0.0, ropod_y = 0.0, ropod_theta = 0.0, distance_feeler_wall = 0.0;
 double odom_x = 0.0, odom_y = 0.0, odom_theta= 0.0, odom_phi = 0.0, odom_v = 0.0;
-float distance = 0.0, wall_theta = 0.0, delta_theta = 0.0, robot_vel = 0.0;
-float prev_x = 0.0, prev_y = 0.0;
+float wall_theta = 0.0, wall_next = 0.0, delta_theta = 0.0, robot_vel = 0.0;
+float prev_x = 0.0, prev_y = 0.0, phi_des_l = 0, phi_des_r = 0;
+float robot_velocity = 1.0, smoothing_factor=0.25, decel_step=0.13;
 geometry_msgs::Point feeler_point; 
 
 bool start_navigation = false, run_exe = false;
 
+// assign numbers to different states, starting from idle = 0 sequentially
 typedef enum{
     idle,
     cruising,
@@ -53,6 +58,7 @@ typedef enum{
     inter_straight,
     overtake_spacious,
     overtake_tight,
+    cornering,
     maxi_states,
 } RobotState;
 
@@ -60,9 +66,10 @@ typedef enum{
 // assign proper names to events
 typedef enum{
     event_0,event_1,event_2,event_3,event_4,event_5,event_6,event_7,event_8, \
-    event_9,event_10,event_11,event_12,event_13,event_14,event_15,event_16,event_17
+    event_9,event_10,event_11,event_12,event_13,event_14,event_15,event_16,event_17,event_18
 }RobotEvent;
 
+// structure to define current state and transition state for a given event
 typedef struct {
     RobotState current;
     RobotEvent event;
@@ -78,7 +85,7 @@ static StateTransitionElement state_transition_table[] = {
     {align_decel, event_4 , turn},
     {align_accel, event_5 , turn},
     {turn, event_6 , cruising},
-    {cruising, event_7 , entry_straight},
+    {idle, event_7 , entry_straight},
     {entry_straight, event_8 , inter_straight},
     {inter_straight, event_9 , cruising},
     {cruising, event_10 , overtake_spacious},
@@ -88,7 +95,7 @@ static StateTransitionElement state_transition_table[] = {
     {inter_straight, event_14 , overtake_spacious},
     {turn, event_15 , overtake_tight},
     {inter_straight, event_16 ,overtake_tight},
-    {turn, event_17 , overtake_spacious}
+    {turn, event_17 , overtake_spacious},
 };
 
 class TubeNavigationROS
@@ -96,10 +103,13 @@ class TubeNavigationROS
     public:
         TubeNavigationROS();
         void event(RobotEvent new_event);
-	    void run(){__run();};
+	    void cruising(){__run();};
         void getFeeler();
         void Idle();
+        void entry_corner();
         virtual ~TubeNavigationROS();
+	    geometry_msgs::Twist cmd_vel;
+	    
         
 
 

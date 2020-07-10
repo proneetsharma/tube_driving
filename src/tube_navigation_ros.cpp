@@ -1,16 +1,22 @@
 #include "ros/ros.h"
 #include "tube_navigation/tube_navigation_ros.h"
 
+// structure contains state and corresponding function pointer
 typedef struct {
     RobotState state;
     void (TubeNavigationROS::*func)();
 }StateFunction;
 
+// state is mapped to corresponding function pointer
 static StateFunction transition_map[] = {
     {idle , &TubeNavigationROS::Idle},
-    {cruising , &TubeNavigationROS::run}
+    {cruising , &TubeNavigationROS::cruising},
+    {cornering,&TubeNavigationROS::entry_corner}
 };
 
+bool side = false;
+
+//Function to handle the subscriber and publisher
 TubeNavigationROS::TubeNavigationROS() : nh("~")
 {
     maximum_states = maxi_states;
@@ -27,12 +33,12 @@ TubeNavigationROS::TubeNavigationROS() : nh("~")
     feeler_pub = nh.advertise<visualization_msgs::Marker>("feeler/visualization_marker", 1);
     nextState_pub = nh.advertise<visualization_msgs::Marker>("next_state", 1);
 
-
     dynamic_reconfigure::Server<tube_navigation::TubeNavigationConfig>::CallbackType f;
     f = boost::bind(&TubeNavigationROS::dynamicReconfigureCallback, this, _1, _2);
     dyn_recon_srv.setCallback(f);
 }
 
+// inactive state of robot, required during initialization 
 void TubeNavigationROS::Idle(){
 
 }
@@ -43,6 +49,7 @@ void TubeNavigationROS::event(RobotEvent new_event){
     while (event_generated){
         event_generated = false;
         assert(current_state < maxi_states); 
+        // call the respective function using for the state
         (this->*transition_map[current_state].func)();
     //delete event data once used
     }
@@ -50,7 +57,7 @@ void TubeNavigationROS::event(RobotEvent new_event){
 
 void TubeNavigationROS::laserScanCallback(const sensor_msgs::LaserScan::ConstPtr& sensormsg)
 {
-
+    //code here
 }
 
 void TubeNavigationROS::visualizeMarker()
@@ -111,7 +118,7 @@ void TubeNavigationROS::visualizeMarker()
     outer_wallmarker_pub.publish(outer_offset_wall);
 
 }
-
+  
 void TubeNavigationROS::getFeeler()
 {
 	geometry_msgs::Point feeler_point; 
@@ -137,6 +144,9 @@ void TubeNavigationROS::getFeeler()
 
 	float L = sqrt((x1-x2)*(x1-x2)+(y1-y2)*(y1-y2));
 	float offsetPixels = 0.5;
+
+    float m = x2 + offsetPixels * (y2-y1) / L;
+    float n = y2 + offsetPixels * (x1-x2) / L;
 
 	// fillers at some offset from robot
 	if (L != 0)
@@ -169,6 +179,7 @@ void TubeNavigationROS::getFeeler()
     getCurrentAndNextState(x,y);
 }
 
+//Calculate the distance between the feeler and wall
 double distBetweenFeelerTube(geometry_msgs::Point fp, GeometryVertex tfc, GeometryVertex tbc)
 {
 	// https://en.wikipedia.org/wiki/Distance_from_a_point_to_a_line
@@ -180,7 +191,6 @@ double distBetweenFeelerTube(geometry_msgs::Point fp, GeometryVertex tfc, Geomet
 void TubeNavigationROS::getCurrentAndNextState(float x, float y)
 {
     geometry_msgs::Point nextpoint;
-    AreaType currentIdLabel;
     std::vector<Area>::iterator ait;
 
     GeometryVertex left_point;
@@ -208,6 +218,7 @@ void TubeNavigationROS::getCurrentAndNextState(float x, float y)
             nextpoint.y = ait->p3.y;
             nextState.points.push_back(nextpoint);
 
+            // visualize a point on the front vertices of current area
             nextState.header.frame_id = "/map";
             nextState.header.stamp = ros::Time::now();
             nextState.id = 0;
@@ -223,23 +234,20 @@ void TubeNavigationROS::getCurrentAndNextState(float x, float y)
             nextState.lifetime = ros::Duration();
             nextState_pub.publish(nextState);
 
+            // Distance between robot center and front wall of a area
             float distance = distBetweenFeelerTube(robot_c, left_point, right_point);
 
             currentIdLabel.label = ait->label;
             currentIdLabel.type = ait->type;
 
-            std::cout << "Label: " << currentIdLabel.label << "Type: " << currentIdLabel.type <<"\n";
-            
+            // update the state when robot crosses an area.
             if(distance < 0) 
             {
                 current_label++;   
             }
 
-        }   
-            
+        }          
     }
-
- 
 }
 
 
@@ -300,7 +308,7 @@ void TubeNavigationROS::goalRouteCallback(const ropod_ros_msgs::RoutePlannerActi
                     points.points.push_back(p);
                 }
 
-            
+            // Store relevent information of an area
             Area areainfo;
             areainfo.p1 = vertex_list[points_size-1];
             areainfo.p2 = vertex_list[points_size-2];
@@ -346,20 +354,15 @@ void TubeNavigationROS::goalRouteCallback(const ropod_ros_msgs::RoutePlannerActi
                 }
             }    
         }
-        // Area areainfo;
-        // areainfo.p1 = vertex_list[(i*4)+1];
-        // areainfo.p2 = vertex_list[(i*4)+2];
-        // areainfo.p3 = vertex_list[(i*4)+3];
-        // areainfo.p4 = vertex_list[(i*4)+4];
-        // areainfo.label = i+1;
-        // areainfo.type = "junction";
-        // area_list.push_back(areainfo);
 
     }
+    // Make the bool true after storing the area to navigate and 
+    // Robot parameters are properly defined
     start_navigation = true;
     visualizeMarker();
 }
 
+// Function to get the pose of the robot from AMCL
 void TubeNavigationROS::poseAMCLCallback(const geometry_msgs::PoseWithCovarianceStamped::ConstPtr& msgAMCL)
 {
     poseAMCL_x = msgAMCL->pose.pose.position.x;
@@ -367,7 +370,7 @@ void TubeNavigationROS::poseAMCLCallback(const geometry_msgs::PoseWithCovariance
     poseAMCL_a = tf::getYaw(msgAMCL->pose.pose.orientation); 
     ROS_INFO_STREAM("Received pose");   
 }
-
+// Function to get the robot pose from the odom tf from Rviz
 void TubeNavigationROS::getOdomVelCallback(const nav_msgs::Odometry::ConstPtr& odom_vel)
 {
     odom_x = odom_vel->twist.twist.linear.x;
@@ -377,20 +380,19 @@ void TubeNavigationROS::getOdomVelCallback(const nav_msgs::Odometry::ConstPtr& o
     odom_v = sqrt(odom_x*odom_x+odom_y*odom_y);
 }
 
+// Function that handle the whole execution of the navigation
 void TubeNavigationROS::__run()
 {
 	if (start_navigation == true)
 	{	    
-	    geometry_msgs::Twist cmd_vel;
 	    ros::Rate rate(10.0);
 		bool start = true;
 	    for (int i=0; i<area_list.size(); i++)
 	    {
-			// while (fabs(right_vertex_list[(i*2)+1].y-ropod_y)>=1e-1)
 			while (currentIdLabel.label != area_list[i+1].label)
 			{
 				getFeeler();				
-				float phi_des_0 = 0; 
+				// get robot pose from tf
 				tf::TransformListener tf_listener;
 				tf::StampedTransform t_ropod_pose;
 				std::string target_frame = std::string("ropod_001/base_link");
@@ -401,48 +403,65 @@ void TubeNavigationROS::__run()
 				ropod_x = t_ropod_pose.getOrigin().getX();
 				ropod_y = t_ropod_pose.getOrigin().getY();
 				ropod_theta = tf::getYaw(t_ropod_pose.getRotation());
-
+                //Calculate the angle of the wall
 				prev_x = right_vertex_list[(i*2)+0].x, prev_y = right_vertex_list[(i*2)+0].y;   
 				wall_theta = atan2(right_vertex_list[(i*2)+1].y-prev_y, right_vertex_list[(i*2)+1].x-prev_x);
-				double wall_1 = atan2(right_vertex_list[(i*2)+3].y-right_vertex_list[(i*2)+2].y, right_vertex_list[(i*2)+3].x-right_vertex_list[(i*2)+2].x);
-				
-				cmd_vel.linear.x = 1.1;//cos(robot_vel);
-				phi_des_0 = atan2(ropod_y, right_vertex_list[(i*2)+1].y);
-				double distance = distBetweenFeelerTube(feeler.points[0], right_vertex_list[(i*2)+1], right_vertex_list[(i*2)+0]);
+				wall_next = atan2(right_vertex_list[(i*2)+3].y-right_vertex_list[(i*2)+2].y, right_vertex_list[(i*2)+3].x-right_vertex_list[(i*2)+2].x);
+                //Publish the velocity																
+				cmd_vel.linear.x = robot_velocity;
+				phi_des_l = atan2(ropod_y, right_vertex_list[(i*2)+1].y);
+                phi_des_r = atan2(ropod_x, right_vertex_list[(i*2)+1].x);
+                //Calculate the distance from feeler to wall
+				distance_feeler_wall = distBetweenFeelerTube(feeler.points[0], right_vertex_list[(i*2)+1], right_vertex_list[(i*2)+0]);
 				cmd_vel_pub.publish(cmd_vel);
-				// std::cout << "Hallway angle: "<< wall_1-wall_theta; 
-				if (abs(wall_1-wall_theta)<=1)
-				{
-					if (fabs(wall_theta - ropod_theta)>=1e-1)
-					{		
-						if (fabs(distance)>0.8)		
-						{
-							delta_theta = wall_theta-ropod_theta; //poseAMCLa - wall_theta;
-							cmd_vel.angular.z = delta_theta-phi_des_0-1;
-							cmd_vel_pub.publish(cmd_vel);
-							start = false;
-						}	 
-						else
-						{
-							delta_theta = wall_theta-ropod_theta; //poseAMCLa - wall_theta;
-							cmd_vel.angular.z = delta_theta;
-							cmd_vel_pub.publish(cmd_vel);
-						}
-					}
+
+				if (currentIdLabel.type == "hallway")
+				{                  
+                    //Check for the feeler distance with wall
+                    if ((fabs(distance_feeler_wall)>0.5) && (fabs(fabs(wall_theta) - fabs(ropod_theta))>=1e-1) && !side)
+                    {
+                        // steering angle calculation
+                        delta_theta = atan2(sin(wall_theta-ropod_theta), cos(wall_theta-ropod_theta));
+                        cmd_vel.angular.z = delta_theta-phi_des_l;
+                        cmd_vel_pub.publish(cmd_vel);
+                    }
+                    else
+                    {
+                        // Correct the angle based on the transition entry of the feeler
+                        delta_theta = atan2(sin(wall_theta-ropod_theta), cos(wall_theta-ropod_theta));
+                        if (side && wall_theta<ropod_theta)//(distance<0) && (ropod_theta < 0))
+                        {
+                            cmd_vel.angular.z = delta_theta+(phi_des_r*smoothing_factor);
+                        }
+                        else
+                        {
+                            cmd_vel.angular.z = delta_theta;
+                        }
+                        //publish the correction angle
+                        cmd_vel_pub.publish(cmd_vel);
+                    }
 				} 
 				else
 				{
-					cmd_vel.angular.z = wall_theta-ropod_theta;
-
-					// cmd_vel.angular.z = -(ropod_theta+3.14);
-					cmd_vel_pub.publish(cmd_vel);
+                    event(event_1);
 				}				
 			}
 		}
 		run_exe = true;
 	}
 }
-    
+// state machine for cornering
+void TubeNavigationROS::entry_corner()
+{
+	geometry_msgs::Twist cmd_vel;
+    //Publish the robot angle and velocity for the turn, left and right direction
+    //is changed based on the sign
+    cmd_vel.linear.x = robot_velocity*decel_step;
+    cmd_vel.angular.z = -(ropod_theta+M_PI);
+    cmd_vel_pub.publish(cmd_vel);
+    side = true;
+}	
+   
 void TubeNavigationROS::dynamicReconfigureCallback(tube_navigation::TubeNavigationConfig &dyn_config, uint32_t level)
 {
 
@@ -461,6 +480,7 @@ int main(int argc, char *argv[])
     ros::Rate loop_rate(10.0);
     while (ros::ok())
     {
+        //Check for new navigation
 		if (run_exe == false)
 		{
             tube_navigtion_ros.event(event_0);
